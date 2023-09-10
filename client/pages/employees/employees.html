@@ -1,0 +1,121 @@
+<!-- employees.html -->
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Employees</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.1/dist/css/bootstrap.min.css" rel="stylesheet"
+    integrity="sha384-4bw+/aepP/YC94hEpVNVgiZdgIC5+VKNBQNGCHeKRQN+PtmoHDEXuppvnDJzQIu9" crossorigin="anonymous" />
+</head>
+
+<body>
+  <div class="d-flex justify-content-between p-3">
+    <div>
+      <p class="lead" id="headerUsername"></p>
+    </div>
+    <div>
+      <button type="button" onclick="logout()" class="btn btn-outline-secondary">Log Out</button>
+    </div>
+  </div>
+  <div id="app">
+    <header>
+      <ul class="nav nav-tabs">
+        <li class="nav-item"><a class="nav-link active" aria-current="page"
+            href="/client/pages/employees/employees.html">Employees</a></li>
+        <li class="nav-item"><a class="nav-link" href="/client/pages/shifts/shifts.html">Shifts</a></li>
+        <li class="nav-item"><a class="nav-link" href="/client/pages/departments/departments.html">Departments</a></li>
+      </ul>
+    </header>
+
+    <h2>Employees Collection</h2>
+
+    <a href="/client/pages/employees/addemployee.html">Add New Employee</a>
+
+    <table class="table table-striped table-hover" id="employeesTable">
+      <thead>
+        <tr>
+          <th>Employee ID</th>
+          <th>Name</th>
+          <th>Department</th>
+          <th>Shifts</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+  <script>
+    const accessToken = sessionStorage.getItem("accessToken");
+    const userName = sessionStorage.getItem("name")
+
+    async function fetchData() {
+
+      const headerUsername = document.getElementById("headerUsername");
+      headerUsername.innerText = `Welcome, ${userName}`;
+
+      console.log("Fetching data...");
+      try {
+        const resp = await fetch("http://localhost:8000/employees", {
+          method: "get",
+          headers: {
+            "x-access-token": accessToken,
+            "x-user": userName,
+          },
+        });
+
+        const { status } = resp;
+        if (status === 403) {
+          console.log(status)
+          location.href = "../login.html";
+          return;
+        }
+
+        const data = await resp.json();
+        console.log("Data fetched:", data);
+
+        populateTable(data);
+      } catch (error) {
+        console.error("Error fetching data:", error);
+      }
+    }
+
+    function populateTable(data) {
+
+      const table = document
+        .getElementById("employeesTable")
+        .getElementsByTagName("tbody")[0];
+      data.forEach((employee) => {
+        const row = table.insertRow();
+        const cell1 = row.insertCell(0);
+        const cell2 = row.insertCell(1);
+        const cell3 = row.insertCell(2);
+        const cell4 = row.insertCell(3);
+        cell1.innerHTML = employee._id;
+        // Create links for employee name, department, and shifts
+        cell2.innerHTML = `<a href="/client/pages/employees/editemployee.html?empId=${employee._id}">${employee.firstName} ${employee.lastName}</a>`;
+        if (employee.department) {
+          cell3.innerHTML = `<a href="/client/pages/departments/editdepartment.html?depId=${employee.department._id}">${employee.department.name}</a>`;
+        } else {
+          cell3.innerHTML = "-";
+        }
+        let shiftsList = "";
+        employee.shifts?.forEach((shift) => {
+          shiftsList += `<a href="/client/pages/shifts/editshift.html?shiftId=${shift._id}">${shift.date.split("T")[0]}</a>, `;
+        });
+        shiftsList = shiftsList.slice(0, -2);
+        cell4.innerHTML = shiftsList ? shiftsList : "-";
+
+      });
+    }
+
+    function logout() {
+      sessionStorage.removeItem("accessToken")
+      location.href = "../login.html";
+    }
+
+    window.onload = fetchData;
+  </script>
+</body>
+
+</html>

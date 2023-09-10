@@ -1,0 +1,263 @@
+<!-- editdepartment.html -->
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Client Side App - Edit Department</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.1/dist/css/bootstrap.min.css" rel="stylesheet"
+        integrity="sha384-4bw+/aepP/YC94hEpVNVgiZdgIC5+VKNBQNGCHeKRQN+PtmoHDEXuppvnDJzQIu9" crossorigin="anonymous" />
+</head>
+
+<body>
+    <div id="app">
+        <header>
+            <div class="d-flex justify-content-between p-3">
+                <div>
+                    <p class="lead" id="headerUsername"></p>
+                </div>
+                <div>
+                    <button type="button" onclick="logout()" class="btn btn-outline-secondary">Log Out</button>
+                </div>
+            </div>
+            <ul class="nav nav-tabs">
+                <li class="nav-item"><a class="nav-link" href="/client/pages/employees/employees.html">Employees</a>
+                </li>
+                <li class="nav-item"><a class="nav-link" href="/client/pages/shifts/shifts.html">Shifts</a>
+                </li>
+                <li class="nav-item"><a class="nav-link active" aria-current="page"
+                        href="/client/pages/departments/departments.html">Departments</a></li>
+            </ul>
+        </header>
+
+        <h2>Edit Department</h2>
+        <form id="editDepForm">
+            <br>
+            Department Name: <input type="text" id="depName" /> <br />
+            Manager:
+            <select id="manager" required>
+                <option id="managerOption" value=""></option>
+                <!-- Options will be appended dynamically -->
+            </select>
+            <br>
+            Current Employees:
+            <ul id="currentEmps">
+                <!-- Employees will be appended dynamically -->
+            </ul>
+
+            Available Employees:
+            <ul id="availableEmps">
+                <!-- Employees will be appended dynamically -->
+            </ul>
+            <br />
+            <button id="submit-btn" onclick="updateDepartment()">Update</button> <br>
+            <button id="delete-btn" onclick="deleteDepartment()">Delete This Department</button>
+        </form>
+        <h5 id="errMsg" style="color: red;"></h5>
+    </div>
+    <script>
+        const departmentsUrl = "http://localhost:8000/departments";
+        const employeesUrl = "http://localhost:8000/employees";
+        const accessToken = sessionStorage.getItem("accessToken");
+        const userName = sessionStorage.getItem("name")
+        // Fetch department ID from this URL params
+        const urlParams = new URLSearchParams(window.location.search);
+        const depId = urlParams.get("depId");
+
+        // Populate Manager select dropdown and Employees checkboxes
+        async function populateDepartmentDetails() {
+
+            const headerUsername = document.getElementById("headerUsername");
+            headerUsername.innerText = `Welcome, ${userName}`;
+
+            console.log("Fetching department details for depId", depId);
+            try {
+                const resp = await fetch(`${departmentsUrl}/${depId}`, {
+                    method: "get",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "x-access-token": accessToken,
+                        "x-user": userName,
+                    },
+                });
+                const { status } = resp;
+                if (status === 403) {
+                    console.log(status)
+                    location.href = "../login.html";
+                    return;
+                }
+                const dep = await resp.json();
+                console.log("Department's details fetched:", dep);
+
+                // Populate the form fields with this department details
+                document.getElementById("depName").value = dep.name;
+                if (dep.manager) {
+                    document.getElementById("managerOption").text = `${dep.manager.firstName} ${dep.manager.lastName}`;
+                    document.getElementById("managerOption").value = dep.manager._id
+                }
+                const currentEmps = document.getElementById("currentEmps");
+                dep.employees?.forEach((employee) => {
+                    // Populate the department's employees as checkboxes
+                    // Create checkbox
+                    const checkbox = document.createElement("input")
+                    checkbox.type = "checkbox"
+                    checkbox.id = employee._id.toString()
+                    checkbox.checked = true
+                    // Create label
+                    const label = document.createElement("label")
+                    label.htmlFor = checkbox.id
+                    label.textContent = `${employee.firstName} ${employee.lastName}`
+
+                    currentEmps.appendChild(checkbox)
+                    currentEmps.appendChild(label)
+                    currentEmps.appendChild(document.createElement("br"))
+                });
+                console.log("Form populated with department details");
+            } catch (error) {
+                console.error("Error fetching department's details:", error);
+            }
+        }
+        // Populate the Manager select dropdown and Employees checkboxes
+        async function populateEmployees() {
+            try {
+                const resp = await fetch(employeesUrl, {
+                    method: "get",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "x-access-token": accessToken,
+                        "x-user": userName,
+                    },
+                });
+                const { status } = resp;
+                if (status === 403) {
+                    console.log(status)
+                    location.href = "../login.html";
+                    return;
+                }
+
+                const employees = await resp.json()
+                console.log("Employees fetched:", employees)
+
+                const managerSelect = document.getElementById("manager");
+                const employeesSelect = document.getElementById("availableEmps")
+                // Populate the form with employees
+                // All employees into the managerSelect
+                employees.forEach((employee) => {
+                    const option = document.createElement("option");
+                    option.value = employee._id;
+                    option.text = `${employee.firstName} ${employee.lastName}`;
+                    managerSelect.appendChild(option);
+                    if (!employee.department) {
+                        // Employees that are not assigned to department, into the employeesSelect
+                        // Create checkbox
+                        const checkbox = document.createElement("input")
+                        checkbox.type = "checkbox"
+                        checkbox.id = employee._id.toString()
+                        // Create label
+                        const label = document.createElement("label")
+                        label.htmlFor = checkbox.id
+                        label.textContent = `${employee.firstName} ${employee.lastName}`
+                        const lineBreak = document.createElement("br");
+
+                        employeesSelect.appendChild(checkbox)
+                        employeesSelect.appendChild(label)
+                        employeesSelect.appendChild(lineBreak)
+                    }
+                });
+            } catch (error) {
+                console.error("Error fetching employees:", error);
+            }
+        }
+        // Handle submit
+        async function updateDepartment() {
+            event.preventDefault();
+            console.log("Updating department...")
+            document.getElementById("submit-btn").disabled = true;
+
+            const depName = document.getElementById("depName").value;
+            const manager = document.getElementById("manager").value;
+
+            // Get all selected employees from currentEmps and availableEmps
+            const selectedCurrentEmps = document.querySelectorAll(`#currentEmps input[type="checkbox"]:checked`);
+            const selectedAvailableEmps = document.querySelectorAll(`#availableEmps input[type="checkbox"]:checked`);
+
+            const selectedEmps = [...selectedCurrentEmps, ...selectedAvailableEmps];
+
+            const selectedEmpsIds = Array.from(selectedEmps).map(checkbox => checkbox.id);
+
+            const updatedDepartment = {
+                name: depName,
+                manager: manager || null,
+                employees: selectedEmpsIds.length > 0 ? selectedEmpsIds : []
+            }
+
+            console.log("Object to update:", updatedDepartment);
+
+            try {
+                const resp = await fetch(`${departmentsUrl}/${depId}`, {
+                    method: "PATCH",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "x-access-token": accessToken,
+                        "x-user": userName,
+
+                    },
+                    body: JSON.stringify(updatedDepartment),
+                });
+                const { status } = resp;
+                if (status === 403) {
+                    console.log(status)
+                    location.href = "../login.html";
+                    return;
+                }
+                if (resp.ok) {
+                    const respData = await resp.json();
+                    console.log("Department updated:", respData);
+                }
+            } catch (error) {
+                console.error("Error updating department:", error)
+                document.getElementById("submit-btn").disabled = false
+                document.getElementById("errMsg").innerText = `Error: ${error.message}`
+            }
+        }
+
+        // Send deletion request
+        async function deleteDepartment() {
+            event.preventDefault()
+            console.log("Deleting department from database...")
+            try {
+                const resp = await fetch(`${departmentsUrl}/${depId}`, {
+                    method: "delete",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "x-access-token": accessToken,
+                        "x-user": userName,
+                    },
+                })
+                if (resp.status == 204) {
+                    console.log("Department deleted!")
+                    location.href = "/client/pages/departments/departments.html";
+                }
+            } catch (error) {
+                console.error("Error deleting department:", error);
+                document.getElementById("errMsg").innerText = `Error: ${error.message}`
+            }
+        }
+
+        // Main function to fetch data and populate the page
+        async function setUpPage() {
+            await populateDepartmentDetails();
+            await populateEmployees()
+        }
+
+        function logout() {
+            sessionStorage.removeItem("accessToken")
+            location.href = "../login.html";
+        }
+
+        window.onload = setUpPage;
+    </script>
+</body>
+
+</html>

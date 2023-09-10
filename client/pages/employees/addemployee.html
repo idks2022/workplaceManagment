@@ -1,0 +1,160 @@
+<!-- addemployee.html -->
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Add Employee</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.1/dist/css/bootstrap.min.css" rel="stylesheet"
+    integrity="sha384-4bw+/aepP/YC94hEpVNVgiZdgIC5+VKNBQNGCHeKRQN+PtmoHDEXuppvnDJzQIu9" crossorigin="anonymous" />
+</head>
+
+<body>
+  <div id="app">
+    <header>
+      <div class="d-flex justify-content-between p-3">
+        <div>
+          <p class="lead" id="headerUsername"></p>
+        </div>
+        <div>
+          <button type="button" onclick="logout()" class="btn btn-outline-secondary">Log Out</button>
+        </div>
+      </div>
+      <ul class="nav nav-tabs">
+        <li class="nav-item"><a class="nav-link active" aria-current="page"
+            href="/client/pages/employees/employees.html">Employees</a></li>
+        <li class="nav-item"><a class="nav-link" href="/client/pages/shifts/shifts.html">Shifts</a></li>
+        <li class="nav-item"><a class="nav-link" href="/client/pages/departments/departments.html">Departments</a></li>
+      </ul>
+    </header>
+
+    <h2>Add New Employee</h2>
+    <form id="addEmployeeForm">
+      Firstname:* <input type="text" id="firstName" required /> <br />
+      Lastname:* <input type="text" id="lastName" required /> <br />
+      Year of start:* <input type="number" id="startYear" required /> <br />
+      Department:
+      <select id="departmentSelect">
+        <option value="" text=""></option>
+        <!-- options will be appended dynamically -->
+      </select>
+      <br />
+      <button id="submit-btn" type="submit">Create</button>
+    </form>
+    <h5 id="errMsg" style="color: red;"></h5>
+    <p>*required fields</p>
+  </div>
+  <script>
+    const employeesUrl = "http://localhost:8000/employees";
+    const departmentsUrl = "http://localhost:8000/departments";
+    const accessToken = sessionStorage.getItem("accessToken");
+    const userName = sessionStorage.getItem("name")
+
+    // Function to populate department options
+    async function populateDepartments() {
+
+      const headerUsername = document.getElementById("headerUsername");
+      headerUsername.innerText = `Welcome, ${userName}`;
+
+      try {
+        console.log("Fetching data...");
+        const resp = await fetch(departmentsUrl, {
+          method: "get",
+          headers: {
+            "Content-Type": "application/json",
+            "x-access-token": accessToken,
+            "x-user": userName,
+          },
+        });
+        const { status } = resp;
+        if (status === 403) {
+          console.log(status)
+          location.href = "../login.html";
+          return;
+        }
+
+        const departments = await resp.json();
+        console.log("Departments fetched:", departments);
+
+        const departmentSelect = document.getElementById("departmentSelect");
+        // Populate the department's dropdown with departments
+        departments.forEach((dep) => {
+          // Create option
+          const option = document.createElement("option");
+          option.value = dep._id;
+          option.text = dep.name;
+
+          departmentSelect.appendChild(option);
+        });
+      } catch (error) {
+        console.error("Error fetching departments:", error);
+      }
+    }
+
+    // Handle submission
+    async function handleSubmit(event) {
+      event.preventDefault();
+      document.getElementById("submit-btn").disabled = true;
+
+      const firstName = document.getElementById("firstName").value;
+      const lastName = document.getElementById("lastName").value;
+      const startYear = document.getElementById("startYear").value;
+      const departmentId = document.getElementById("departmentSelect").value;
+
+      const newEmployee = {
+        firstName,
+        lastName,
+        startYear,
+      };
+      if (departmentId) {
+        newEmployee.department = departmentId
+      }
+
+      console.log("Object to create:", newEmployee)
+
+      try {
+        const resp = await fetch(employeesUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-access-token": accessToken,
+            "x-user": userName,
+          },
+          body: JSON.stringify(newEmployee),
+        });
+        const { status } = resp;
+        if (status === 403) {
+          console.log(status)
+          location.href = "../login.html";
+          return;
+        }
+        if (resp.ok) {
+          const respData = await resp.json();
+          console.log("Employee created:", respData);
+          location.href = "/client/pages/employees/employees.html";
+        }
+      } catch (error) {
+        console.error("Error adding employee:", error);
+        document.getElementById("submit-btn").disabled = false;
+        document.getElementById("errMsg").innerText = `Error: ${error.message}`
+      }
+    }
+
+    // set up page
+    async function setUpPage() {
+      await populateDepartments();
+      const form = document.getElementById("addEmployeeForm");
+      form.addEventListener("submit", handleSubmit);
+    }
+
+    function logout() {
+      sessionStorage.removeItem("accessToken")
+      location.href = "../login.html";
+    }
+
+    window.onload = setUpPage;
+  </script>
+</body>
+
+</html>

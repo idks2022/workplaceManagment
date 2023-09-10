@@ -1,0 +1,186 @@
+<!-- adddepartment.html -->
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Add Department</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.1/dist/css/bootstrap.min.css" rel="stylesheet"
+    integrity="sha384-4bw+/aepP/YC94hEpVNVgiZdgIC5+VKNBQNGCHeKRQN+PtmoHDEXuppvnDJzQIu9" crossorigin="anonymous" />
+</head>
+
+<body>
+  <div id="app">
+
+    <header>
+      <div class="d-flex justify-content-between p-3">
+        <div>
+          <p class="lead" id="headerUsername"></p>
+        </div>
+        <div>
+          <button type="button" onclick="logout()" class="btn btn-outline-secondary">Log Out</button>
+        </div>
+      </div>
+      <ul class="nav nav-tabs">
+        <li class="nav-item"><a class="nav-link" href="/client/pages/employees/employees.html">Employees</a></li>
+        <li class="nav-item"><a class="nav-link" href="/client/pages/shifts/shifts.html">Shifts</a>
+        </li>
+        <li class="nav-item"><a class="nav-link active" aria-current="page"
+            href="/client/pages/departments/departments.html">Departments</a></li>
+      </ul>
+    </header>
+
+    <h2>Add New Department</h2>
+    <form id="addDepForm">
+      Department Name:* <input type="text" id="depName" required /> <br />
+      Manager:*
+      <select id="manager" required>
+        <option text=""></option>
+        <!-- Options will be appended dynamically -->
+      </select>
+      <br />
+      Available Employees:
+      <ul id="employees">
+        <!-- Checkboxes will be appended dynamically -->
+      </ul>
+  </div>
+  <button id="submit-btn" type="submit">Create</button>
+  </form>
+  <h5 id="errMsg" style="color: red;"></h5>
+  <p>*required fields</p>
+  </div>
+  <script>
+    const departmentsUrl = "http://localhost:8000/departments";
+    const employeesUrl = "http://localhost:8000/employees"; // URL to fetch employees
+    const accessToken = sessionStorage.getItem("accessToken");
+    const userName = sessionStorage.getItem("name")
+
+    // Function to populate the Manager select dropdown and Employees checkboxes
+    async function populate() {
+
+      const headerUsername = document.getElementById("headerUsername");
+      headerUsername.innerText = `Welcome, ${userName}`;
+
+      try {
+        console.log("Fetching data...");
+        const resp = await fetch(employeesUrl, {
+          method: "get",
+          headers: {
+            "Content-Type": "application/json",
+            "x-access-token": accessToken,
+            "x-user": userName,
+          },
+        });
+        const { status } = resp;
+        if (status === 403) {
+          console.log(status)
+          location.href = "../login.html";
+          return;
+        }
+
+        const employees = await resp.json()
+        console.log("Employees fetched:", employees)
+
+        const managerSelect = document.getElementById("manager");
+        const employeesSelect = document.getElementById("employees")
+        // Populate the emoloyees selections with employees
+        employees?.forEach((employee) => {
+          // Create options for the managerSelect
+          // Create option
+          const option = document.createElement("option");
+          option.value = employee._id;
+          option.text = `${employee.firstName} ${employee.lastName}`;
+          managerSelect.appendChild(option);
+          if (!employee.department) {
+            // Create checkboxes for the employeesSelect
+            // Create checkbox
+            const checkbox = document.createElement("input")
+            checkbox.type = "checkbox"
+            checkbox.id = employee._id.toString()
+            // Create label
+            const label = document.createElement("label")
+            label.htmlFor = checkbox.id
+            label.textContent = `${employee.firstName} ${employee.lastName}`
+
+            employeesSelect.appendChild(checkbox)
+            employeesSelect.appendChild(label)
+            employeesSelect.appendChild(document.createElement("br"))
+          }
+        });
+      } catch (error) {
+        console.error("Error fetching employees:", error);
+      }
+    }
+
+    // Handle submission
+    async function handleSubmit(event) {
+      event.preventDefault();
+      document.getElementById("submit-btn").disabled = true;
+
+      const depName = document.getElementById("depName").value;
+      const manager = document.getElementById("manager").value;
+
+      // Get the selected employee checkboxes
+      const selectedEmployeeCheckboxes = document.querySelectorAll('#employees input[type="checkbox"]:checked');
+      // Extract the employees IDs from the selected checkboxes
+      const selectedEmployeeIds = Array.from(selectedEmployeeCheckboxes).map(checkbox => checkbox.id);
+
+      const newDepartment = {
+        name: depName,
+      };
+      if (manager) {
+        newDepartment.manager = manager;
+      }
+      if (selectedEmployeeIds.length > 0) {
+        newDepartment.employees = selectedEmployeeIds;
+      }
+
+      console.log("Object to create:", newDepartment);
+
+      try {
+        const resp = await fetch(departmentsUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-access-token": accessToken,
+            "x-user": userName,
+          },
+          body: JSON.stringify(newDepartment),
+        });
+        const { status } = resp;
+        if (status === 403) {
+          console.log(status)
+          location.href = "../login.html";
+          return;
+        }
+        if (resp.ok) {
+          const respData = await resp.json();
+          console.log("Department created:", respData);
+          location.href = "/client/pages/departments/departments.html";
+        }
+      } catch (error) {
+        console.error("Error adding department:", error);
+        document.getElementById("submit-btn").disabled = false;
+        document.getElementById("errMsg").innerText = `Error: ${error.message}`
+      }
+    }
+
+
+    // Function to set up the page
+    async function setUpPage() {
+      await populate();
+      const form = document.getElementById("addDepForm");
+      form.addEventListener("submit", handleSubmit);
+    }
+
+    function logout() {
+      sessionStorage.removeItem("accessToken")
+      location.href = "../login.html";
+    }
+
+    window.onload = setUpPage;
+  </script>
+</body>
+
+</html>

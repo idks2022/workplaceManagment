@@ -1,0 +1,65 @@
+<!-- login.html -->
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Departments</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.1/dist/css/bootstrap.min.css" rel="stylesheet"
+    integrity="sha384-4bw+/aepP/YC94hEpVNVgiZdgIC5+VKNBQNGCHeKRQN+PtmoHDEXuppvnDJzQIu9" crossorigin="anonymous" />
+</head>
+
+<body>
+
+
+  Username: <input type="text" id="username" required /> <br />
+  Password: <input type="password" id="password" required /> <br />
+  <button onclick="login()">Login</button>
+
+  <p>
+    For demo purposes - get usernames and passwords from
+    <a href="https://jsonplaceholder.typicode.com/users" target="_blank">this link</a>
+    (password will be the user's email)
+  </p>
+
+  <script>
+    const url = "http://localhost:8000/auth/login";
+
+    const login = async () => {
+      const username = document.getElementById("username").value
+      const password = document.getElementById("password").value
+      const loginData = {
+        username,
+        password
+      };
+
+      try {
+        const resp = await fetch(url, {
+          method: "post",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(loginData),
+        });
+
+        const { accessToken, name } = await resp.json();
+
+        if (resp.ok) {
+          console.log("User verified")
+
+          // Store the access token and name in the session storage
+          sessionStorage["accessToken"] = accessToken
+          sessionStorage["name"] = name
+          location.href = "./employees/employees.html";
+        }
+      } catch (error) {
+        console.error(error)
+      }
+
+
+    };
+  </script>
+</body>
+
+</html>

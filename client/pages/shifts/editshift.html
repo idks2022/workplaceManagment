@@ -1,0 +1,270 @@
+<!-- editshift.html -->
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Client Side App - Edit Shift</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.1/dist/css/bootstrap.min.css" rel="stylesheet"
+        integrity="sha384-4bw+/aepP/YC94hEpVNVgiZdgIC5+VKNBQNGCHeKRQN+PtmoHDEXuppvnDJzQIu9" crossorigin="anonymous" />
+</head>
+
+<body>
+    <div id="app">
+        <header>
+            <div class="d-flex justify-content-between p-3">
+                <div>
+                    <p class="lead" id="headerUsername"></p>
+                </div>
+                <div>
+                    <button type="button" onclick="logout()" class="btn btn-outline-secondary">Log Out</button>
+                </div>
+            </div>
+            <ul class="nav nav-tabs">
+                <li class="nav-item"><a class="nav-link" href="/client/pages/employees/employees.html">Employees</a>
+                </li>
+                <li class="nav-item"><a class="nav-link active" aria-current="page"
+                        href="/client/pages/shifts/shifts.html">Shifts</a>
+                </li>
+                <li class="nav-item"><a class="nav-link"
+                        href="/client/pages/departments/departments.html">Departments</a></li>
+            </ul>
+        </header>
+
+        <h2>Edit Shift</h2>
+        <form id="editShiftForm">
+            <br>
+            Date: <input type="date" id="shiftDate" /> <br />
+            Starting Hour: <input type="number" id="startingHour" /> <br />
+            Ending Hour: <input type="number" id="endingHour" /> <br />
+            Current Employees:
+            <ul id="currentEmps">
+                <!-- Employees will be appended dynamically -->
+            </ul>
+            <br />
+            Available Employees:
+            <ul id="availableEmps">
+                <!-- Employees will be appended dynamically -->
+            </ul>
+            <br />
+            <button id="submit-btn" onclick="updateShift()">Update</button> <br>
+            <button id="delete-btn" onclick="deleteShift()">Delete This Shift</button>
+        </form>
+        <h5 id="errMsg" style="color: red;"></h5>
+    </div>
+    <script>
+        const shiftsUrl = "http://localhost:8000/shifts";
+        const employeesUrl = "http://localhost:8000/employees";
+        const accessToken = sessionStorage.getItem("accessToken");
+        const userName = sessionStorage.getItem("name")
+        // Fetch shift ID from this URL paramas
+        const urlParams = new URLSearchParams(window.location.search);
+        const shiftId = urlParams.get("shiftId");
+
+        // Populate Shift details and Employees checkboxes
+        async function populateShiftDetails() {
+
+            const headerUsername = document.getElementById("headerUsername");
+            headerUsername.innerText = `Welcome, ${userName}`;
+
+            console.log("Fetching shift details for shiftId", shiftId);
+            try {
+                const resp = await fetch(`${shiftsUrl}/${shiftId}`, {
+                    method: "get",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "x-access-token": accessToken,
+                        "x-user": userName,
+                    },
+                });
+                const { status } = resp;
+                if (status === 403) {
+                    console.log(status)
+                    location.href = "../login.html";
+                    return;
+                }
+                const shift = await resp.json();
+                console.log("Shift's details fetched:", shift);
+
+                // Populate the form fields with this shift details
+                document.getElementById("shiftDate").value = shift.date.split("T")[0];
+                document.getElementById("startingHour").value = shift.startingHour;
+                document.getElementById("endingHour").value = shift.endingHour;
+                const currentEmps = document.getElementById("currentEmps");
+                shift.employees?.forEach((employee) => {
+                    // Populate the department's employees as checkboxes
+                    // Create checkbox
+                    const checkbox = document.createElement("input")
+                    checkbox.type = "checkbox"
+                    checkbox.id = employee._id.toString()
+                    checkbox.checked = true
+                    // Create label
+                    const label = document.createElement("label")
+                    label.htmlFor = checkbox.id
+                    label.textContent = `${employee.firstName} ${employee.lastName}`
+
+                    currentEmps.appendChild(checkbox)
+                    currentEmps.appendChild(label)
+                    currentEmps.appendChild(document.createElement("br"))
+                });
+                console.log("Form populated with shift details");
+            } catch (error) {
+                console.error("Error fetching shift's details:", error);
+            }
+        }
+
+        // Populate available employees as checkboxes
+        async function populateEmployees() {
+            try {
+                const resp = await fetch(employeesUrl, {
+                    method: "get",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "x-access-token": accessToken,
+                        "x-user": userName,
+                    },
+                });
+                const { status } = resp;
+                if (status === 403) {
+                    console.log(status)
+                    location.href = "../login.html";
+                    return;
+                }
+
+                const employees = await resp.json()
+                console.log("Employees fetched:", employees)
+
+                // Create an array of of employees that are not assigned to this shift
+                const availableEmps = employees?.filter((emp) => {
+                    if (!emp.shifts.some((empShift) => empShift._id == shiftId)) {
+                        return emp
+                    }
+                })
+                console.log("available employees:", availableEmps)
+
+                const availableEmpsSelect = document.getElementById("availableEmps")
+
+                availableEmps.forEach((employee) => {
+                    // Employees that are not assigned to this shift
+                    // Create checkbox
+                    const checkbox = document.createElement("input")
+                    checkbox.type = "checkbox"
+                    checkbox.id = employee._id.toString()
+                    // Create label
+                    const label = document.createElement("label")
+                    label.htmlFor = checkbox.id
+                    label.textContent = `${employee.firstName} ${employee.lastName}`
+                    const lineBreak = document.createElement("br");
+
+                    availableEmpsSelect.appendChild(checkbox)
+                    availableEmpsSelect.appendChild(label)
+                    availableEmpsSelect.appendChild(lineBreak)
+                });
+
+            } catch (error) {
+                console.error("Error fetching employees:", error);
+            }
+        }
+        // Handle submit
+        async function updateShift() {
+            event.preventDefault();
+            console.log("Updating shift...");
+            document.getElementById("submit-btn").disabled = true;
+
+            const shiftDate = document.getElementById("shiftDate").value;
+            const startingHour = document.getElementById("startingHour").value;
+            const endingHour = document.getElementById("endingHour").value;
+
+            // Get all selected employees from currentEmps and availableEmps
+            const selectedCurrentEmps = document.querySelectorAll(`#currentEmps input[type="checkbox"]:checked`);
+            const selectedAvailableEmps = document.querySelectorAll(`#availableEmps input[type="checkbox"]:checked`);
+
+            const selectedEmps = [...selectedCurrentEmps, ...selectedAvailableEmps];
+
+            const selectedEmpsIds = Array.from(selectedEmps).map(checkbox => checkbox.id);
+
+            const updatedShift = {
+                date: shiftDate,
+                startingHour: startingHour,
+                endingHour: endingHour,
+                employees: selectedEmpsIds.length > 0 ? selectedEmpsIds : []
+            };
+
+            console.log("Object to update:", updatedShift);
+
+            try {
+                const resp = await fetch(`${shiftsUrl}/${shiftId}`, {
+                    method: "PATCH",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "x-access-token": accessToken,
+                        "x-user": userName,
+                    },
+                    body: JSON.stringify(updatedShift),
+                });
+                const { status } = resp;
+                console.log(status)
+                if (status === 403) {
+                    console.log(status)
+                    location.href = "../login.html";
+                    return;
+                }
+
+                if (resp.ok) {
+                    const respData = await resp.json();
+                    console.log("Shift updated:", respData);
+                }
+            } catch (error) {
+                console.error("Error updating shift:", error);
+                document.getElementById("submit-btn").disabled = false;
+                document.getElementById("errMsg").innerText = `Error: ${error.message}`
+            }
+        }
+
+        // Send deletion request
+        async function deleteShift() {
+            event.preventDefault();
+            console.log("Deleting shift from database...");
+            try {
+                const resp = await fetch(`${shiftsUrl}/${shiftId}`, {
+                    method: "delete",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "x-access-token": accessToken,
+                        "x-user": userName,
+                    },
+                });
+                if (resp.ok) {
+                    console.log("Shift deleted!");
+                    location.href = "/client/pages/shifts/shifts.html";
+                }
+                const { status } = resp;
+                if (status === 403) {
+                    console.log(status)
+                    location.href = "../login.html";
+                    return;
+                }
+            } catch (error) {
+                console.error("Error deleting shift:", error);
+                document.getElementById("errMsg").innerText = `Error: ${error.message}`
+            }
+        }
+
+        // Main function to fetch data and populate the page
+        async function setUpPage() {
+            await populateShiftDetails();
+            await populateEmployees();
+        }
+
+        function logout() {
+            sessionStorage.removeItem("accessToken")
+            location.href = "../login.html";
+        }
+
+        window.onload = setUpPage;
+
+    </script>
+</body>
+
+</html>
